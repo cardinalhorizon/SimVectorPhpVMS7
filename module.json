@@ -1,0 +1,16 @@
+{
+    "name": "SimVector",
+    "alias": "simvector",
+    "description": "",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\SimVector\\Providers\\AppServiceProvider",
+        "Modules\\SimVector\\Providers\\EventServiceProvider",
+        "Modules\\SimVector\\Providers\\RouteServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}
