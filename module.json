@@ -1,7 +1,12 @@
 {
     "name": "SimVector",
     "alias": "simvector",
-    "description": "",
+    "version": "0.1.0",
+    "description": "Aeronautical Data for Flight Simulation",
+    "attribution": {
+        "text": "Cardinal Horizon",
+        "url": "https://simvector.net"
+    },
     "keywords": [],
     "active": 1,
     "order": 0,

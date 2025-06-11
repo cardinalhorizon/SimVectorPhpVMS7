@@ -47,7 +47,7 @@ class AppServiceProvider extends ServiceProvider
         // $this->moduleSvc->addFrontendLink('SimVector', '/simvector', '', $logged_in=true);
 
         // Admin links:
-        $this->moduleSvc->addAdminLink('SimVector', '/admin/simvector');
+        //$this->moduleSvc->addAdminLink('SimVector', '/admin/simvector');
     }
 
     /**
