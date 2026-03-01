@@ -1,7 +1,7 @@
 {
     "name": "SimVector",
     "alias": "simvector",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "Aeronautical Data for Flight Simulation",
     "attribution": {
         "text": "Cardinal Horizon",
@@ -9,13 +9,16 @@
     },
     "keywords": [],
     "active": 1,
-    "order": 0,
+    "order": 1,
+    "priority": 5,
     "providers": [
         "Modules\\SimVector\\Providers\\AppServiceProvider",
         "Modules\\SimVector\\Providers\\EventServiceProvider",
         "Modules\\SimVector\\Providers\\RouteServiceProvider"
     ],
     "aliases": {},
-    "files": [],
+    "files": [
+        "helpers.php"
+    ],
     "requires": []
 }

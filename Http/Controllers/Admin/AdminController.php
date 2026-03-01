@@ -4,6 +4,9 @@ namespace Modules\SimVector\Http\Controllers\Admin;
 
 use App\Contracts\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+use Modules\SimVector\Models\SVSetting;
 
 /**
  * Admin controller
@@ -19,7 +22,18 @@ class AdminController extends Controller
      */
     public function index(Request $request)
     {
-        return view('simvector::admin.index');
+        // Get or create the settings record
+        $settings = SVSetting::firstOrCreate(
+            ['key' => 'core'],
+            ['value' => [
+                'api_key' => '',
+                'smartcars_route_override' => false,
+            ]]
+        );
+
+        return view('simvector::admin.index', [
+            'settings' => $settings->value ?? [],
+        ]);
     }
 
     /**
@@ -74,6 +88,18 @@ class AdminController extends Controller
      */
     public function update(Request $request)
     {
+        $smartcars_route_override = $request->input('smartcars_route_override') ? true : false;
+        SVSetting::updateOrCreate([
+            'key' => 'core',
+        ], [
+            'value' => [
+                'api_key' => $request->input('api_key', ''),
+                'smartcars_route_override' => $smartcars_route_override,
+            ],
+        ]);
+        Cache::forget('sv_settings');
+        flash()->success('Settings saved successfully!');
+        return redirect()->route('admin.simvector.index');
     }
 
     /**

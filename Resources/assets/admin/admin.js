@@ -1,0 +1,2 @@
+import {createVueApp} from 'vue';
+

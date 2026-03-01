@@ -5,6 +5,7 @@ namespace Modules\SimVector\Providers;
 use Illuminate\Routing\Router;
 use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
 use Illuminate\Support\Facades\Route;
+use Modules\SimVector\Http\Controllers\Api\ScheduleCloudController;
 
 /**
  * Register the routes required for your module here
@@ -91,5 +92,25 @@ class RouteServiceProvider extends ServiceProvider
         Route::group($config, function() {
             $this->loadRoutesFrom(__DIR__.'/../Http/Routes/api.php');
         });
+
+        // Override the default API routes as required
+        Route::group([
+            'middleware' => ['api', 'api.auth'],
+        ], function() {
+            //Route::get('/api/flights/search', [ScheduleCloudController::class, 'default_api_search'])->name('api.flights.search');
+        });
+        // Override the smartCARS API Routes
+        if (sv_setting('core.smartcars_route_override', false)) {
+            $sc_headers = '\Modules\SmartCARS3phpVMS7Api\Http\Middleware\SCHeaders';
+            $sc_auth = '\Modules\SmartCARS3phpVMS7Api\Http\Middleware\SCAuth';
+            Route::group([
+                'prefix' => '/api/smartcars/flights',
+                'controller' => ScheduleCloudController::class,
+                'middleware' => [$sc_headers, $sc_auth]
+            ], function () {
+                Route::match(['post', 'options'], '/book', 'sc_book');
+                Route::match(['get', 'options'], '/search', 'sc_search');
+            });
+        }
     }
 }
