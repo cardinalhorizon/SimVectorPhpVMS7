@@ -134,7 +134,7 @@ class DataService
         $params['api_key'] = $api_key;
         $params['format'] = 'phpVMS7';
         $res = Http::get($url, $params)->json();
-        //dd($url, $params ,$res);
+        dd($url, $params ,$res);
         // If there's an error in the response, log it and return an empty array
         if (isset($res['error'])) {
             Log::error("SimVector API Error: " . $res['error']['message'] ?? 'Unknown error', [
