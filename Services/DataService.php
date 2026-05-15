@@ -104,6 +104,7 @@ class DataService
         return Flight::create([
             'id'               => "SV_".$data['natural_key'],
             'flight_number'    => $data['flight_number'],
+            'route_code'       => "SV",
             'airline_id'       => $data['airline_id'],
             'dpt_airport_id'   => $data['departure_airport'],
             'arr_airport_id'   => $data['arrival_airport'],
@@ -134,7 +135,6 @@ class DataService
         $params['api_key'] = $api_key;
         $params['format'] = 'phpVMS7';
         $res = Http::get($url, $params)->json();
-        dd($url, $params ,$res);
         // If there's an error in the response, log it and return an empty array
         if (isset($res['error'])) {
             Log::error("SimVector API Error: " . $res['error']['message'] ?? 'Unknown error', [
