@@ -45,7 +45,7 @@ at [https://cardinalhorizon.com/discord](https://cardinalhorizon.com/discord) fo
 
 ---
 © 2025 Cardinal Horizon. All rights reserved.
-## Schedule Cloud / Live Flights (v0.3.0)
+## Schedule Cloud / Live Flights
 
 The **SimVector Flights** page (`/simvector/flights`) browses Schedule Cloud data from the SimVector API
 (`https://api.simvector.net/v1`, overridable with `SV_API_URL`; legacy `.../api` values are normalised to `.../v1`).
