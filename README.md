@@ -45,3 +45,32 @@ at [https://cardinalhorizon.com/discord](https://cardinalhorizon.com/discord) fo
 
 ---
 © 2025 Cardinal Horizon. All rights reserved.
+## Schedule Cloud / Live Flights (v0.3.0)
+
+The **SimVector Flights** page (`/simvector/flights`) browses Schedule Cloud data from the SimVector API
+(`https://api.simvector.net/v1`, overridable with `SV_API_URL`; legacy `.../api` values are normalised to `.../v1`).
+The community API key (Admin → SimVector) is sent server-side in the `x-api-key` header, so it never reaches the browser.
+
+**Browsing**
+- Airline cards → departure-airport cards (with "Flies from"/"You are here" based on the pilot's current/home airport).
+- From/To pickers limited to routes that actually exist, with swap, popular-destination and recent-pair chips.
+- Operator filter, sortable results, infinite scroll, and a multi-leg trip bar (bids placed are chained, with connection warnings).
+- Shallow search first; for a full airport pair a deep search runs behind it (server-throttled, costs credits).
+
+**Module API** (all behind phpVMS `x-api-key` auth, prefix `/api/simvector`)
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /operators` | Operators selected by the community |
+| `GET /routes` | Static airports + routes index (supports `ETag` / `If-None-Match`, `operators`, `departure_icao`, `arrival_icao`) |
+| `GET /flights` | Search: `departure_icao`, `arrival_icao`, `operators`, `depth=shallow\|deep`, `limit`, `cursor`; returns `{data, meta, now}` |
+| `POST /bids`, `DELETE /bids` | Add / remove a bid (creates the local `SV_*` flight) |
+| `GET /token` | Exchange the VA key for a SimVector JWT (used by the smartCARS Flight Center plugin) |
+
+Errors are returned as `{error: {code, message}}` with the upstream status (e.g. 402 `subscription_required`, 422 `invalid_cursor`).
+
+**Building the frontend** (Laravel Mix 6; use Node 22 or older — Node 25/26 break Mix's `yargs`):
+
+```bash
+cd modules/SimVector && npm install && npm run prod
+```

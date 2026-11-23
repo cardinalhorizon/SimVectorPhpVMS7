@@ -25,8 +25,42 @@ class FlightsController extends Controller
     ){}
     public function search(Request $request)
     {
-        $flights = $this->dataService->getLiveFlights($request->departure_airport, $request->arrival_airport);
-        return response()->json($flights);
+        // Legacy params (departure_airport/arrival_airport) are still accepted.
+        $res = $this->dataService->searchLive([
+            'departure_icao' => $request->input('departure_icao', $request->input('departure_airport')),
+            'arrival_icao'   => $request->input('arrival_icao', $request->input('arrival_airport')),
+            'operators'      => $request->input('operators'),
+            'depth'          => $request->input('depth'),
+            'limit'          => $request->input('limit'),
+            'cursor'         => $request->input('cursor'),
+            'format'         => 'schedule_cloud',
+        ]);
+
+        // Envelope: {data, meta, now}
+        return response()->json($res);
+    }
+
+    public function operators()
+    {
+        return response()->json(['data' => $this->dataService->getSelectedOperators()]);
+    }
+
+    public function routes(Request $request)
+    {
+        $res = $this->dataService->getRoutes(
+            $request->only(['operators', 'departure_icao', 'arrival_icao']),
+            $request->header('If-None-Match')
+        );
+        if ($res['status'] === 304) {
+            return response('', 304)->header('ETag', $res['etag'] ?? '');
+        }
+
+        $out = response()->json($res['body']);
+        if ($res['etag']) {
+            $out->header('ETag', $res['etag']);
+        }
+
+        return $out;
     }
 
     public function book(Request $request)
@@ -42,6 +76,12 @@ class FlightsController extends Controller
     }
     public function unbook(Request $request)
     {
-        $this->bidService->removeBid($request->flight_id, Auth::user());
+        $flight = Flight::find($request->flight_id);
+        if (!$flight) {
+            return response()->json(['error' => 'Flight not found'], 404);
+        }
+        $this->bidService->removeBid($flight, Auth::user());
+
+        return response()->json(['message' => 'Bid removed']);
     }
 }

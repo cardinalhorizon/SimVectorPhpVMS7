@@ -6,7 +6,6 @@ use App\Contracts\Modules\ServiceProvider;
 use App\Services\ModuleService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
-use Modules\CHJumpSeat\Models\CHSetting;
 use Modules\SimVector\Models\SVSetting;
 
 /**
@@ -31,8 +30,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->registerLinks();
         $this->copyAssets();
-        // Uncomment this if you have migrations
-        $this->loadMigrationsFrom(__DIR__ . '/../Database/Migrations');
+        $this->loadMigrationsFrom(__DIR__ . '/../Database/migrations');
     }
 
     /**

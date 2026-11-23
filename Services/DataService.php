@@ -8,6 +8,8 @@ use App\Models\Flight;
 use App\Models\Subfleet;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Modules\SimVector\Exceptions\SimVectorApiException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -16,9 +18,8 @@ class DataService
     public function __construct(
         public \App\Services\UserService $userSvc
     ) {
-        // Constructor to inject dependencies
-        $this->simvector_api_key = sv_setting('core.api_key', '');
-        $this->simvector_api_url = env('SV_API_URL', 'https://simvector.net/api');
+        $this->simvector_api_key = (string) sv_setting('core.api_key', '');
+        $this->simvector_api_url = self::normalizeBaseUrl(env('SV_API_URL', 'https://api.simvector.net/v1'));
     }
 
     private string $simvector_api_url;
@@ -26,43 +27,129 @@ class DataService
     private $airlines = [];
     private $subfleets = [];
 
+    /**
+     * Accepts legacy values (".../api") as well as the current ".../v1" form.
+     */
+    public static function normalizeBaseUrl(string $url): string
+    {
+        $url = rtrim($url, '/');
+        if (!preg_match('#/v\d+$#', $url)) {
+            $url .= '/v1';
+        }
+
+        return $url;
+    }
+
+    private function http(): \Illuminate\Http\Client\PendingRequest
+    {
+        return Http::withHeaders(['x-api-key' => $this->simvector_api_key])
+            ->acceptJson()
+            ->timeout(20);
+    }
+
+    /**
+     * Throw a SimVectorApiException for any non-success (and non-304) response.
+     */
+    private function ensureOk(\Illuminate\Http\Client\Response $res): \Illuminate\Http\Client\Response
+    {
+        if ($res->successful() || $res->status() === 304) {
+            return $res;
+        }
+        $json = $res->json();
+        $err = is_array($json) ? ($json['error'] ?? $json) : [];
+        $code = is_array($err) ? ($err['code'] ?? null) : (is_string($err) ? $err : null);
+        $message = is_array($err) ? ($err['message'] ?? null) : null;
+        Log::error('SimVector API error', ['status' => $res->status(), 'code' => $code, 'body' => $res->body()]);
+
+        throw new SimVectorApiException($res->status(), $code ?: 'upstream_error', $message ?: 'SimVector API request failed');
+    }
+
     public function generateUserJWT(User $user)
     {
-        $url = $this->simvector_api_url."/v1/auth/jwt";
-        $res = Http::get($url, [
-            'api_key' => $this->simvector_api_key
-        ]);
-        $json = $res->json();
+        $res = $this->http()->get($this->simvector_api_url.'/auth/jwt');
+        $json = $res->json() ?? [];
         $json['status'] = $res->status();
+
         return $json;
     }
+
     public function getAirports($icaos = null, $format = null)
     {
-        // If the icaos is an array, convert it to a comma-separated string
         if (is_array($icaos)) {
             $icaos = implode(',', $icaos);
         }
-        $url = $this->simvector_api_url."/v1/data/airports";
-        return Http::get($url, [
-            'icaos' => $icaos,
+
+        return $this->http()->get($this->simvector_api_url.'/data/airports', [
+            'icaos'  => $icaos,
             'format' => $format,
-            'api_key' => $this->simvector_api_key,
         ])->json();
+    }
+
+    /**
+     * Operators selected by the community. Cached briefly.
+     */
+    public function getSelectedOperators(): array
+    {
+        return Cache::remember('simvector.operators.'.md5($this->simvector_api_key), 300, function () {
+            $res = $this->ensureOk($this->http()->get($this->simvector_api_url.'/data/selected_operators'));
+
+            return $res->json('data') ?? $res->json() ?? [];
+        });
+    }
+
+    /**
+     * Static airports + routes index. Supports conditional requests: pass the
+     * client's If-None-Match value; returns ['status'=>304|200,'etag'=>..,'body'=>..].
+     */
+    public function getRoutes(array $filters = [], ?string $ifNoneMatch = null): array
+    {
+        $headers = $ifNoneMatch ? ['If-None-Match' => $ifNoneMatch] : [];
+        $params = array_filter(
+            \Illuminate\Support\Arr::only($filters, ['operators', 'departure_icao', 'arrival_icao']),
+            fn ($v) => $v !== null && $v !== ''
+        );
+        $res = $this->ensureOk($this->http()->withHeaders($headers)->get($this->simvector_api_url.'/data/routes', $params));
+
+        return [
+            'status' => $res->status(),
+            'etag'   => $res->header('ETag'),
+            'body'   => $res->status() === 304 ? null : $res->json(),
+        ];
+    }
+
+    /**
+     * Raw Schedule Cloud search. Returns the full envelope {data, meta, now}.
+     * depth: shallow|deep, limit: 1-500, cursor from meta.next_cursor.
+     */
+    public function searchLive(array $p): array
+    {
+        $params = array_filter([
+            'departure_icao' => $p['departure_icao'] ?? null,
+            'arrival_icao'   => $p['arrival_icao'] ?? null,
+            'operators'      => is_array($p['operators'] ?? null) ? implode(',', $p['operators']) : ($p['operators'] ?? null),
+            'format'         => $p['format'] ?? 'schedule_cloud',
+            'depth'          => $p['depth'] ?? null,
+            'limit'          => $p['limit'] ?? null,
+            'cursor'         => $p['cursor'] ?? null,
+        ], fn ($v) => $v !== null && $v !== '');
+
+        return $this->ensureOk($this->http()->get($this->simvector_api_url.'/data/live/search', $params))->json() ?? [];
     }
 
     public function getFlightsSmartCARS($params = [])
     {
         $res = $this->getLiveFlights(
-            $params['departure_icao'] ?? '',
-            $params['arrival_icao'] ?? '',
-            $params['airline_icao'] ?? ''
+            $params['departure_icao'] ?? null,
+            $params['arrival_icao'] ?? null,
+            $params['operators'] ?? null,
+            isset($params['limit']) ? (int) $params['limit'] : null,
         );
-        // map the response to the output with the generateSmartCARS3Flight function
+
         return array_map(function ($flight) {
             return self::generateSmartCARS3Flight($flight);
         }, $res ?? []);
-
     }
+
     public function createFlight($flight_id)
     {
 
@@ -72,15 +159,11 @@ class DataService
             return $existingFlight; // Return the existing flight if found
         }
         // Get the flight from the API
-        $api_key = $this->simvector_api_key;
         // If the flight_id starts with SV_, we need to remove it
         if (str_starts_with($flight_id, 'SV_')) {
             $flight_id = substr($flight_id, 3);
         }
-        $url = $this->simvector_api_url."/v1/data/live/flight/".$flight_id;
-        $res = Http::get($url, [
-            'api_key' => $api_key
-        ]);
+        $res = $this->http()->get($this->simvector_api_url.'/data/live/flight/'.$flight_id);
         // Check if the response was successful
         if (!$res->successful()) {
             Log::error("Failed to fetch flight data from SimVector API", [
@@ -121,28 +204,18 @@ class DataService
     }
 
     public function getLiveFlights(
-        string $departure_icao = null,
-        string $arrival_icao = null,
+        ?string $departure_icao = null,
+        ?string $arrival_icao = null,
+        ?string $operators = null,
+        ?int $limit = null,
     ) {
-        $api_key = $this->simvector_api_key;
-        $url = $this->simvector_api_url. "/v1/data/live/search";
-        // build the params array based on the provided parameters
-        $params = [];
-        if ($departure_icao)
-            $params['departure_icao'] = $departure_icao;
-        if ($arrival_icao)
-            $params['arrival_icao'] = $arrival_icao;
-        $params['api_key'] = $api_key;
-        $params['format'] = 'phpVMS7';
-        $res = Http::get($url, $params)->json();
-        // If there's an error in the response, log it and return an empty array
-        if (isset($res['error'])) {
-            Log::error("SimVector API Error: " . $res['error']['message'] ?? 'Unknown error', [
-                'code' => $res['error']['code'] ?? 'N/A',
-                'params' => $params
-            ]);
-            throw new \Exception("SimVector API Error: " . $res['error']['message'] ?? 'Unknown error');
-        }
+        $res = $this->searchLive([
+            'departure_icao' => $departure_icao,
+            'arrival_icao'   => $arrival_icao,
+            'operators'      => $operators,
+            'limit'          => $limit,
+            'format'         => 'phpVMS7',
+        ]);
         // Provide all the subfleets for an airline based on
         $this->subfleets = Subfleet::with('aircraft')
             ->get()
