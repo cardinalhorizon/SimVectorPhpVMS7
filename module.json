@@ -1,7 +1,7 @@
 {
     "name": "SimVector",
     "alias": "simvector",
-    "version": "0.2.0",
+    "version": "1.0.0",
     "description": "Aeronautical Data for Flight Simulation",
     "attribution": {
         "text": "Cardinal Horizon",

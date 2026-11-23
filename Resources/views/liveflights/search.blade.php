@@ -14,13 +14,17 @@
 
             'user' => [
                 'id' => $user ? $user->id : null,
-                'current_airport' => ($user && $user->current_airport)
-                    ? ['icao' => $user->current_airport->icao]
+                'current_airport' => ($user && $user->curr_airport_id)
+                    ? ['icao' => $user->curr_airport_id]
+                    : null,
+                'home_airport' => ($user && $user->home_airport_id)
+                    ? ['icao' => $user->home_airport_id]
                     : null,
             ],
             'initialSaved' => $saved,
             'onlyFlightsFromCurrent' => setting('pilots.only_flights_from_current', false),
             'apiBaseUrl' => url('/api'),
+            'bidsUrl' => \Illuminate\Support\Facades\Route::has('frontend.flights.bids') ? route('frontend.flights.bids') : null,
             'apiKey' => $user ? ($user->api_key ?? '') : '',
         ];
     @endphp

@@ -29,16 +29,7 @@ class FlightsController extends Controller
      */
     public function search(Request $request)
     {
-        // Determine if we're overriding the default flights search page
-        // If we are, we must provide a custom view with both of them in the page
-        // If not, we can just return the default view
-        $override_default_flights_page = sv_setting('core.override_flights_search', false);
-
-        if ($override_default_flights_page) {
-            $view = 'simvector::flights.search_override';
-        } else {
-            $view = 'simvector::liveflights.search';
-        }
+        $view = 'simvector::liveflights.search';
 
         $saved_flights = [];
         $bids = Bid::where('user_id', Auth::id())->get();

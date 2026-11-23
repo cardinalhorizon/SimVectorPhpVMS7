@@ -38,99 +38,6 @@ class ScheduleCloudController extends Controller
         public FareService $fareSvc,
     )
     {}
-    /**
-    * Override the default /api/flights/search endpoint to inject SimVector flights
-    *
-    * @param Request $request
-    *
-    * @return mixed
-    */
-    public function default_api_search(Request $request)
-    {
-        // First, call the default search options.
-        /** @var \App\Models\User $user */
-        $user = Auth::user();
-
-        $where = [
-            'active'  => true,
-            'visible' => true,
-        ];
-
-        // Allow the option to bypass some of these restrictions for the searches
-        if (!$request->filled('ignore_restrictions') || $request->get('ignore_restrictions') === '0') {
-            if (setting('pilots.restrict_to_company')) {
-                $where['airline_id'] = $user->airline_id;
-            }
-
-            if (setting('pilots.only_flights_from_current')) {
-                $where['dpt_airport_id'] = $user->curr_airport_id;
-            }
-        }
-
-        try {
-            $this->flightRepo->resetCriteria();
-            $this->flightRepo->searchCriteria($request);
-            $this->flightRepo->pushCriteria(new WhereCriteria($request, $where, [
-                'airline' => ['active' => true],
-            ]));
-
-            $this->flightRepo->pushCriteria(new RequestCriteria($request));
-
-            $with = [
-                'airline',
-                'fares',
-                'field_values',
-                'simbrief' => function ($query) use ($user) {
-                    return $query->with('aircraft')->where('user_id', $user->id);
-                },
-            ];
-
-            $relations = [
-                'subfleets',
-            ];
-
-            if ($request->has('with')) {
-                $relations = explode(',', $request->input('with', ''));
-            }
-
-            foreach ($relations as $relation) {
-                $with = array_merge($with, match ($relation) {
-                    'subfleets' => [
-                        'subfleets',
-                        'subfleets.aircraft',
-                        'subfleets.aircraft.bid',
-                        'subfleets.fares',
-                    ],
-                    default => [],
-                });
-            }
-
-            $flights = $this->flightRepo->with($with)->paginate();
-        } catch (RepositoryException $e) {
-            return response($e, 503);
-        }
-
-        foreach ($flights as $flight) {
-            if (in_array('subfleets', $relations)) {
-                $this->flightSvc->filterSubfleets($user, $flight);
-            }
-
-            $this->fareSvc->getReconciledFaresForFlight($flight);
-        }
-        // Now, let's get SimVector Schedule Cloud flights and merge them in
-        $airlines = Airline::where('active', true)->pluck('icao')->toArray();
-
-        $svdata = $this->dataService->getFlightsSmartCARS([
-            'departure_icao' => $request->query('dpt_airport_id'),
-            'arrival_icao'   => $request->query('arr_airport_id'),
-            'operators'   => join(',', $airlines),
-            'limit'          => $request->query('limit', 100),
-            'format'         => 'phpvms7'
-        ]);
-
-        // We need to convert the svdata into Flight models, but not persist them in the database
-
-    }
     public function sc_book(Request $request)
     {
         $flight_id = $request->flightId ?? $request->input('flightID');
@@ -248,7 +155,6 @@ class ScheduleCloudController extends Controller
             'arrival_icao'   => $request->query('arrivalAirport'),
             'operators'   => join(',', $airlines),
             'limit'          => $limit,
-            'format'         => 'phpvms7'
         ]);
         $output = array_merge($output, $svdata);
 

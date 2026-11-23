@@ -1,38 +1,21 @@
 import { createApp } from 'vue';
+import { createPinia } from 'pinia';
 import LiveFlightSearch from './LiveFlightSearch.vue';
 import { createApi } from './api';
 
-// Get the data hydrated from the Blade template
-const appElement = document.getElementById('app');
-const appData = appElement ? JSON.parse(appElement.dataset.app || '{}') : {};
+// Data hydrated from the Blade template
+const el = document.getElementById('app');
+const appData = el ? JSON.parse(el.dataset.app || '{}') : {};
 
-console.log(appData);
-// Create API instance
 const api = createApi({ baseUrl: appData.apiBaseUrl || '/api', apiKey: appData.apiKey || '' });
 
-// Create and mount the Vue app
 const app = createApp(LiveFlightSearch, {
-    subfleets: appData.subfleets || [],
-    aircraft: appData.aircraft || [],
-    airports: appData.airports || [],
-    airlines: appData.airlines || [],
     initialSaved: appData.initialSaved || {},
-    initialPagination: appData.pagination || {
-        current_page: 1,
-        last_page: 1,
-        total: 0,
-        per_page: 15,
-        from: 0,
-        to: 0
-    },
+    user: appData.user || {},
     onlyFlightsFromCurrent: appData.onlyFlightsFromCurrent || false,
-    apiBaseUrl: appData.apiBaseUrl || '/api',
-    apiKey: appData.apiKey || ''
+    bidsUrl: appData.bidsUrl || null,
 });
 
-// Provide the API instance globally
-app.config.globalProperties.$api = api;
+app.use(createPinia());
 app.provide('api', api);
-
 app.mount('#app');
-

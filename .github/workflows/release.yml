@@ -1,0 +1,49 @@
+name: Package module
+
+# Builds the frontend, packages the module as an installable phpVMS module zip,
+# uploads it as a workflow artifact and, for releases, attaches it to the release.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to attach the zip to a release
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # Laravel Mix 6 breaks on newer Node versions
+          cache: npm
+
+      - name: Build frontend
+        run: |
+          npm ci
+          npm run prod
+
+      - name: Package module
+        id: package
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            .github/scripts/package-module.sh "${{ github.event.release.tag_name }}"
+          else
+            .github/scripts/package-module.sh
+          fi
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}-${{ steps.package.outputs.version }}
+          path: ${{ steps.package.outputs.zip }}
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "${{ steps.package.outputs.zip }}" --clobber
